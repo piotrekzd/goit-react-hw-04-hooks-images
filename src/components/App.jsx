@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import React, { useState, useEffect } from 'react';
 import { fetchImg } from './API/API.js';
 import { Button } from './Button/Button.jsx';
 import { ImageGallery } from './ImageGallery/ImageGallery.jsx';
@@ -8,110 +8,80 @@ import { Modal } from './Modal/Modal.jsx';
 import { Searchbar } from './Searchbar/Searchbar.jsx';
 import style from './App.module.css';
 
-const INITIAL_STATE = {
-  images: [],
-  search: '',
-  page: 1,
-  largeImage: '',
-  isLoading: false,
-  isModalOpen: false,
-  error: null,
-};
+export const App = () => {
+  const [images, setImages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalImg, setModalImg] = useState('');
+  const [modalAlt, setModalAlt] = useState('');
 
-export class App extends Component {
-  state = { ...INITIAL_STATE };
-
-  // submitting form func
-  handleSubmit = e => {
+  // submitting form func fetch images from API
+  const handleSubmit = async e => {
     e.preventDefault();
-    const form = e.currentTarget;
-    const input = form.elements.input.value;
-    // console.log(input);
-    this.setState({ images: [], search: input, page: 1 });
-    form.reset();
-  };
-
-  // updating component + fetch images from API
-  async componentDidUpdate(prevProps, prevState) {
-    if (prevState.page !== this.state.page || prevState.search !== this.state.search) {
-      this.setState({ isLoading: true });
-      try {
-        const fetch = await fetchImg(this.state.search, this.state.page, 12);
-        this.setState(({ images }) => ({ images: [...images, ...fetch.hits] }));
-        document.addEventListener('keyup', e => {
-          if (e.key === 'Escape') {
-            this.closeModal();
-          };
-        });
-      } catch (error) {
-        console.log('Error occurred');
-      } finally {
-          this.setState({ isLoading: false });
-      };
+    setIsLoading({ isLoading: true });
+    const input = e.target.elements.input;
+    if (input.value.trim() === '') {
+      return;
     };
-  };
-
-  // mounting component
-  componentDidMount() {
-    this.setState({ images: [], page: 1 });
-  };
-
-  // unmounting component + closing modal window on esc button
-  componentWillUnmount() {
-    document.removeEventListener('keyup', e => {
-      if (e.key === 'Escape') {
-        this.closeModal();
-      };
-    });
-  };
-
-  // enlarging image on click func 
-  handleEnlargeImage = id => {
-    const element = this.state.images.filter(image => {
-      return image.id === id;
-    });
-    const click = element[0];
-    this.setState({ isModalOpen: true, largeImage: click });
+    const response = await fetchImg(input.value, 1);
+    setImages(response);
+    setIsLoading(false);
+    setSearch(input.value);
+    setPage(2);
   };
 
   // load more button func
-  loadMore = () => {
-    this.setState({ isLoading: true });
-    try {
-      this.setState(({ page }) => ({ page: page + 1 }));
-    } catch (error) {
-      console.log('Error occurred')
-    } finally {
-      this.setState({ isLoading: false });
-    };
-  };
+  const loadMore = async () => {
+    setIsLoading({ isLoading: true });
+    const response = await fetchImg(search, page);
+    setImages([...images, ...response]);
+    setIsLoading(false);
+    setPage(page + 1);
+  }
+
+  // enlraging the image
+  const clickImage = e => {
+    setModalOpen(true);
+    setModalImg(e.target.name);
+    setModalAlt(e.target.alt);
+  }
 
   // closing modal window func
-  closeModal = () => {
-  this.setState({ isModalOpen: false });
+  const closeModal = () => {
+    setModalOpen(false);
+    setModalImg('');
+    setModalAlt('');
   };
 
-  render() {
-    const { images, page, largeImage, isModalOpen, isLoading } = this.state;
-    return (
-      <div className={style.wrapper}>
-        {isModalOpen ? (
-          <Modal clickImage={largeImage} handleClose={this.closeModal} />
-        ) : null}
-        <Searchbar handleSubmit={this.handleSubmit} />
-        {isLoading && (page <= 1) ? <Loader /> : null}
-        <ImageGallery>
-          <ImageGalleryItem 
-            images={images}
-            onClick={this.handleEnlargeImage}
-            loading={isLoading}
-          />
-        </ImageGallery>
-        {isLoading && (page > 2) ? <Loader /> : null}
-        {images.length === 0 ? null : (
-          <Button handleClick={this.loadMore} />
-        )}
-      </div>
-    );
-  };
+  useEffect(() => {
+    const keyDown = e => {
+      if (e.code === 'Escape') {
+        closeModal();
+      };
+    };
+    window.addEventListener('keydown', keyDown);
+  }, []);
+
+  return (
+    <div className={style.wrapper}>
+      {modalOpen ? (
+        <Modal src={modalImg} alt={modalAlt} handleClose={closeModal} />
+      ) : null}
+      <Searchbar handleSubmit={handleSubmit} />
+      {isLoading && (page <= 1) ? <Loader /> : null}
+      <ImageGallery>
+        <ImageGalleryItem
+          images={images}
+          onClick={clickImage}
+          loading={isLoading}
+        />
+      </ImageGallery>
+      {isLoading && (page > 2) ? <Loader /> : null}
+      {images.length === 0 ? null : (
+        <Button handleClick={loadMore} />
+      )}
+    </div>
+  );
 };
